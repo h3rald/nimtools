@@ -1,8 +1,11 @@
 import asynchttpserver2, asyncdispatch, asyncnet, os, strutils, mimetypes, times
-
 from strtabs import PStringTable, newStringTable
-
 from htmlgen as hg import nil
+
+const style = "style.css".slurp
+const appname = "NimHttpd"
+const appversion = "1.0"
+
 
 var port = TPort(8888)
 var address = ""
@@ -15,9 +18,13 @@ type TNimHttpResponse* = tuple[
   content: string,
   headers: PStringTable]
 
-proc h_page(content: string): string =
-  var res = "<!doctype html>\n"
-  res = res & "<html>\n" & hg.head() & hg.body(content) & "</html>"
+proc h_page(content: string, title=""): string =
+  var res = "<!DOCTYPE html>\n"
+  var footer = "<div id=\"footer\">" & appname & " Web Server v" & appversion & "</div>"
+  res = res & "<html>\n" & 
+    hg.head(hg.title(title), "<style type=\"text/css\">"&style&"</style>", "<meta charset=\"UTF-8\">") & 
+    hg.body(hg.h1(title), content, footer) & 
+    "</html>"
   return res
 
 proc sendDirContents(path): TNimHttpResponse = 
@@ -25,27 +32,21 @@ proc sendDirContents(path): TNimHttpResponse =
   var files = newSeq[string](0)
   files.add hg.li(hg.a(href=".", "."))  
   files.add hg.li(hg.a(href="..", "..")) 
-  var title = hg.h1("Index of " & path.replace(cwd, ""))
+  var title = "Index of " & path.replace(cwd, "")
   for i in walkDir(path):
     let name = i.path.extractFilename
     let relpath = i.path.replace(cwd, "")
     files.add hg.li(hg.a(href=relpath, name)) 
-  res = (code: Http200, content: h_page(title & hg.ul(files.join("\n"))), headers: newStringTable())
+  res = (code: Http200, content: h_page(hg.ul(files.join("\n")), title), headers: newStringTable())
   return res
 
 proc sendNotFound(path): TNimHttpResponse = 
-  var res: TNimHttpResponse
-  var content = hg.h1("404 Not Found")
-  content &= hg.p("The page you requested cannot be found.");
-  res = (code: Http404, content: h_page(content), headers: newStringTable())
-  return res
+  var content = hg.p("The page you requested cannot be found.");
+  return (code: Http404, content: h_page(content, $Http404), headers: newStringTable())
 
 proc sendNotImplemented(path): TNimHttpResponse =
-  var res: TNimHttpResponse
-  var content = hg.h1("501 Not Implemented")
-  content &= hg.p("This server does not support the functionality required to fulfill the request.");
-  res = (code: Http501, content: h_page(content), headers: newStringTable())
-  return res
+  var content = hg.p("This server does not support the functionality required to fulfill the request.");
+  return (code: Http501, content: h_page(content, $Http501), headers: newStringTable())
 
 proc sendStaticFile(path): TNimHttpResponse =
   let mimetype = mimes.getMimetype(path.splitFile.ext[1 .. -1])
