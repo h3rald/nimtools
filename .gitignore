@@ -1,3 +1,9 @@
 nimcache/
+*/nimcache/
 build/
 nakefile
+nimhttpd/nimhttpd
+xtea/xtea
+storian/storian
+datauri/datauri
+fwd/fwd
