@@ -1,9 +1,9 @@
-import asynchttpserver2, asyncdispatch, asyncnet, os, strutils, mimetypes, times
+import asynchttpserver2, asyncdispatch, asyncnet, os, strutils, mimetypes, times, parseopt2
 from strtabs import PStringTable, newStringTable
 from htmlgen as hg import nil
 
 const style = "style.css".slurp
-const appname = "NimHttpd"
+const appname = "NimHTTPd"
 const appversion = "1.0"
 
 let usage = appname & " v" & appversion & " - Tiny Web Server for Static Sites" & """
@@ -11,10 +11,10 @@ let usage = appname & " v" & appversion & " - Tiny Web Server for Static Sites" 
   (c) 2014 Fabio Cevasco
 
   Usage:
-    nimhttpd directory [-p:port]
+    nimhttpd [-p:port] [directory]
 
   Arguments:
-    directory      The directory to serve.
+    directory      The directory to serve (default: current directory).
     port           Listen to port (default: 8888).
 """
 
@@ -90,6 +90,39 @@ proc handleCtrlC() {.noconv.} =
 
 setControlCHook(handleCtrlC)
 
+######
+
+for kind, key, val in getopt():
+  case kind
+  of cmdLongOption, cmdShortOption:
+    case key
+    of "help", "h":
+      echo usage
+      quit(0)
+    of "version", "v":
+      echo appversion
+      quit(0)
+    of "port", "p":
+      try:
+        port = TPort(val.parseInt)
+      except:
+        if val == "":
+          echo "Port not set."
+          quit(2)
+        else:
+          echo "Error: Invalid port: '", val, "'"
+          echo "Running on default port instead."
+  of cmdArgument:
+    var dir = cwd/key
+    if dir.existsDir:
+      cwd = dir
+    else:
+      echo "Error: Directory '"&dir&"' does not exist."
+      quit(1)
+  else: 
+    discard
+
 echo appname , " Web Server v", appversion, " started on port ", int(port), "." 
+echo "Serving directory ", cwd
 server.serve(port, handleHttpRequest, address)
 runForever()
