@@ -54,15 +54,18 @@ proc sendStaticFile(path): TNimHttpResponse =
 proc sendDirContents(path): TNimHttpResponse = 
   var res: TNimHttpResponse
   var files = newSeq[string](0)
-  files.add hg.li(hg.a(href=".", "."))  
-  files.add hg.li(hg.a(href="..", "..")) 
+  if path != cwd and path != cwd&"/":
+    files.add hg.li(class="i-back entypo", hg.a(href="..", "..")) 
   var title = "Index of " & path.replace(cwd, "")
   for i in walkDir(path):
     let name = i.path.extractFilename
     let relpath = i.path.replace(cwd, "")
     if name == "index.html" or name == "index.htm":
       return sendStaticFile(i.path)
-    files.add hg.li(hg.a(href=relpath, name)) 
+    if i.path.existsDir:
+      files.add hg.li(class="i-folder entypo", hg.a(href=relpath, name)) 
+    else:
+      files.add hg.li(class="i-file entypo", hg.a(href=relpath, name)) 
   res = (code: Http200, content: h_page(hg.ul(files.join("\n")), title), headers: newStringTable())
   return res
 
