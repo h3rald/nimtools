@@ -38,6 +38,12 @@ proc h_page(content: string, title=""): string =
     "</html>"
   return res
 
+proc relativePath(path): string =
+  return path.replace(cwd, "").replace("\\", "/")
+
+proc relativeParent(path): string =
+  return expandFilename(path/"../").relativePath
+
 proc sendNotFound(path): TNimHttpResponse = 
   var content = hg.p("The page you requested cannot be found.");
   return (code: Http404, content: h_page(content, $Http404), headers: newStringTable())
@@ -54,12 +60,12 @@ proc sendStaticFile(path): TNimHttpResponse =
 proc sendDirContents(path): TNimHttpResponse = 
   var res: TNimHttpResponse
   var files = newSeq[string](0)
-  if path != cwd and path != cwd&"/":
-    files.add hg.li(class="i-back entypo", hg.a(href="..", "..")) 
-  var title = "Index of " & path.replace(cwd, "")
+  if path != cwd and path != cwd&"/" and path != cwd&"\\":
+    files.add hg.li(class="i-back entypo", hg.a(href=path.relativeParent(), "..")) 
+  var title = "Index of " & path.relativePath()
   for i in walkDir(path):
     let name = i.path.extractFilename
-    let relpath = i.path.replace(cwd, "")
+    let relpath = i.path.relativePath();
     if name == "index.html" or name == "index.htm":
       return sendStaticFile(i.path)
     if i.path.existsDir:
