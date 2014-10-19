@@ -39,7 +39,10 @@ proc h_page(content: string, title=""): string =
   return res
 
 proc relativePath(path): string =
-  return path.replace(cwd, "").replace("\\", "/")
+  var relpath = path.replace(cwd, "").replace("\\", "/")
+  if not relpath.endsWith("/"):
+    relpath = relpath&"/"
+  return relpath
 
 proc relativeParent(path): string =
   return expandFilename(path/"../").relativePath
@@ -124,7 +127,7 @@ for kind, key, val in getopt():
   of cmdArgument:
     var dir = cwd/key
     if dir.existsDir:
-      cwd = dir
+      cwd = expandFilename dir
     else:
       echo "Error: Directory '"&dir&"' does not exist."
       quit(1)
@@ -133,5 +136,7 @@ for kind, key, val in getopt():
 
 echo appname , " Web Server v", appversion, " started on port ", int(port), "." 
 echo "Serving directory ", cwd
-server.serve(port, handleHttpRequest, address)
-runForever()
+
+while true:
+  server.serve(port, handleHttpRequest, address)
+  runForever()
