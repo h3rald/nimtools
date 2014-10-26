@@ -9,4 +9,4 @@ A collection of tiny commands and tools implemented using the Nimrod programming
 - [x] **storian** - File Filtering & Archiving Utility
 - [x] **xtea** - File encryption/decryption utility
 - [x] **nimhttpd** - Tiny async web server for static files (to complete)
-- [ ] **fav** - Manage filesystem favorites
+- [ ] **minim** - Minimalistic concatenative programming language
