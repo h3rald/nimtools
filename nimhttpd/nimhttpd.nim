@@ -15,14 +15,14 @@ let usage = appname & " v" & appversion & " - Tiny Web Server for Static Sites" 
 
   Arguments:
     directory      The directory to serve (default: current directory).
-    port           Listen to port (default: 8888).
+    port           Listen to port (default: 1337).
 """
 
-var port = TPort(8888)
+var port = TPort(1337)
 var address = ""
 var www = getCurrentDir()
-var server = newAsyncHttpServer()
-var mimes = newMimeTypes()
+let server = newAsyncHttpServer()
+let mimes = newMimeTypes()
 
 type TNimHttpResponse* = tuple[
   code: THttpCode,
@@ -50,7 +50,11 @@ for kind, key, val in getopt():
           echo "Error: Invalid port: '", val, "'"
           echo "Running on default port instead."
   of cmdArgument:
-    var dir = www/key
+    var dir: string
+    if key.isAbsolute:
+      dir = key
+    else:
+      dir = www/key
     if dir.existsDir:
       www = expandFilename dir
     else:
@@ -71,13 +75,24 @@ proc h_page(content: string, title=""): string =
   return res
 
 proc relativePath(path): string =
-  var relpath = path.replace(cwd, "").replace("\\", "/")
+  var path2 = path
+  if cwd == "/":
+    return path
+  else:
+    path2.delete(0, cwd.len)
+  var relpath = path2.replace("\\", "/")
   if (not relpath.endsWith("/")) and (not path.existsFile):
     relpath = relpath&"/"
+  if not relpath.startsWith("/"):
+    relpath = "/"&relpath
   return relpath
 
 proc relativeParent(path): string =
-  return expandFilename(path/"../").relativePath
+  var relparent = path.parentDir.relativePath
+  if relparent == "":
+    return "/"
+  else: 
+    return relparent
 
 proc sendNotFound(path): TNimHttpResponse = 
   var content = hg.p("The page you requested cannot be found.");
@@ -118,7 +133,7 @@ proc printReqInfo(req) =
 
 proc handleHttpRequest(req: TRequest): PFuture[void] {.closure, gcsafe.}=
   printReqInfo(req)
-  let path = cwd/req.url.path
+  let path = cwd/req.url.path.replace("%20", " ")
   var res: TNimHttpResponse 
   if req.reqMethod != "GET":
     res = sendNotImplemented(path)
