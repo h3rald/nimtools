@@ -1,4 +1,4 @@
-import parseopt2, os, base64, strutils
+import parseopt2, os, streams, base64, strutils
 
 type
   TOperation = enum encryptOp, decryptOp
@@ -11,16 +11,14 @@ const
   d_sum* = delta * rounds
   usage* = "  XTEA v" & version & " - XTEA Encryption/Decryption Utility" & """
 
-  (c) 2014 Fabio Cevasco
+  (c) 2014-2015 Fabio Cevasco
 
   Usage:
-    xtea -p:<password> [ -e | -d] <text>
-    xtea -p:<password> [ -e | -d] -f:<file>
+    xtea -p:<password> [ -e | -d] <stdin>
 
   Options:
     -e, --encrypt (default)     Encrypt text.
     -d, --decrypt               Decrypt text.
-    -f, --file                  Specify a file to encrypt/decrypt (ignores arguments).
     -h, --help                  Display this help text (default if no password and 
                                 no text are specified)
     -p, --password              The password to use to encrypt/decrypt text.
@@ -39,15 +37,6 @@ proc string2bytes(input: string): seq[int8] =
   for i in input:
     output.add cast[int8](i.ord)
   return output
-
-proc zeropad(input: var string) =
-  if input.len mod 8 == 0:
-    return
-  var 
-    padding = (input.len - (input.len mod 8) + 8) - input.len
-    last = input.len-1
-  for i in countup(last, last+padding-1):
-    input = input & "\0"
 
 # Packs a sequence of 8 bytes
 proc pack(input: seq[int8]): array[0..1, int32] =
@@ -117,40 +106,45 @@ proc encipher(input: seq[int8], subkeys: seq[int32]): seq[int8] =
   var res = unpack(v)
   return res
 
-proc process(text: var string, password: string, operation: TOperation): string =
+proc process(stream: Stream, password: string, operation: TOperation): string =
   var opProc: proc(input: seq[int8], subkeys: seq[int32]) :seq[int8]
   if operation == decryptOp:
-    text = decode(text)
-    text = text[0..text.len-2]
     opProc = decipher
   else:
     opProc = encipher
-  zeropad text
+  #zeropad text
   let subkeys = generate_subkeys password
   var
     input, output: seq[int8]
     k = 1
   input.newSeq(0)
   output.newSeq(0)
-  for i in text:
-    input.add cast[int8](i.ord)
+  while not stream.atEnd:
+    input.add stream.readInt8
     # Read eight bytes at a time and process
     if k mod 8 == 0:
       output = output & opProc(input[k-8..k-1], subkeys)
     inc(k)
+  # zeropad
+  if input.len mod 8 != 0:
+    for i in 1..(8-(input.len mod 8)):
+      input.add(0)
+      inc(k)
+    output = output & opProc(input[k-9..k-2], subkeys)
   return bytes2string(output)
 
-proc encrypt*(text: var string, password: string): string =
-  return encode(process(text, password, encryptOp))
+proc encrypt*(stream: Stream, password: string): string =
+  return process(stream, password, encryptOp)
 
-proc decrypt*(text: var string, password: string): string =
-  return process(text, password, decryptOp)
+proc decrypt*(stream: Stream, password: string): string =
+  return process(stream, password, decryptOp)
 
 
 ################
 
 var 
-  password, text, file: string = ""
+  password, file: string = ""
+  stream: FileStream = newFileStream(stdin)
   operation: TOperation = encryptOp
 
 for kind, key, val in getopt():
@@ -169,32 +163,33 @@ for kind, key, val in getopt():
       operation = encryptOp
     of "decript", "d":
       operation = decryptOp
-    of "file", "f":
-      file = val
+    else:
+      discard
   of cmdArgument:
-    text = key
+    file = key
   of cmdEnd: 
     quit(1)
+  else:
+    discard
 
-if password == "" and (text == "" or file == ""):
+if password == "" and file == "":
   echo usage
   quit(0)
 
 if password == "":
   quit("Error: Password not set")
 
-if file != "":
-  if file.existsFile:
-    try:
-      text = file.readFile
-    except:
-      stderr.writeln("Error: " & getCurrentExceptionMsg())
+if file != "" and file.existsFile:
+  try:
+    stream = newFileStream(file, fmRead)
+  except:
+    stderr.writeln("Error: " & getCurrentExceptionMsg())
   
-if text == "":
-  quit("Error: Nothing to encrypt")
-
-case operation
-of encryptOp:
-  echo encrypt(text, password)
-of decryptOp:
-  echo decrypt(text, password)
+if operation == encryptOp:
+  var entext = encrypt(stream, password)
+  echo encode(entext, entext.len*2)
+else:
+  var s = ""
+  while not stream.atEnd:
+    s = s & stream.readChar
+  echo decrypt(s.decode.newStringStream, password)
